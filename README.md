@@ -2,7 +2,11 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/peyeeye.svg)](https://pypi.org/project/peyeeye/)
 [![Python versions](https://img.shields.io/pypi/pyversions/peyeeye.svg)](https://pypi.org/project/peyeeye/)
+[![Downloads](https://static.pepy.tech/badge/peyeeye/month)](https://pepy.tech/project/peyeeye)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Types: py.typed](https://img.shields.io/badge/types-py.typed-informational.svg)](https://peps.python.org/pep-0561/)
+[![CI](https://github.com/peyeeye/peyeeye-python/actions/workflows/test.yml/badge.svg)](https://github.com/peyeeye/peyeeye-python/actions/workflows/test.yml)
+[![Homepage](https://img.shields.io/badge/homepage-peyeeye.ai-E8B4FF.svg)](https://peyeeye.ai)
 
 Official Python client for [**peyeeye.ai**](https://peyeeye.ai) — redact PII on
 the way _into_ your LLM prompts and rehydrate it on the way out.
@@ -16,6 +20,22 @@ pip install peyeeye
 ```
 
 Python 3.9+. Single runtime dependency: `httpx`. Fully type-hinted (`py.typed`).
+
+## Get an API key
+
+1. Sign up at **<https://peyeeye.ai/signup>** (free plan, no card required —
+   1 M characters / month, all 30+ built-in detectors).
+2. Head to **<https://peyeeye.ai/dashboard/keys>** → **New key**.
+3. Copy the full `pk_live_…` (or `pk_test_…`) token shown once — we store only
+   a hash after you close the dialog. Export it where your app reads env vars:
+
+```bash
+export PEYEEYE_KEY=pk_live_...
+```
+
+Test keys bypass billing and are rate-limited for development; live keys count
+against your plan. Paid tiers (Build / Pro / Scale) unlock streaming, custom
+detectors, and higher throughput — see <https://peyeeye.ai/pricing>.
 
 ## Quickstart
 
@@ -138,6 +158,71 @@ for tpl in peyeeye.entity_templates():
 peyeeye.get_session("ses_…")       # SessionInfo
 peyeeye.delete_session("ses_…")    # drop immediately
 ```
+
+## Framework integrations
+
+### LangChain
+
+Drop-in wrapper around any LangChain `Runnable` (chat model, LLM, or chain).
+Redacts the prompt before the model sees it, rehydrates tokens in the response,
+and opens a fresh session per `invoke` so tokens never leak across requests.
+
+```python
+from langchain_openai import ChatOpenAI
+from peyeeye import Peyeeye
+from peyeeye.langchain import with_peyeeye
+
+peyeeye = Peyeeye(api_key=os.environ["PEYEEYE_KEY"])
+model = with_peyeeye(ChatOpenAI(model="gpt-4o-mini"), client=peyeeye)
+
+print(model.invoke("Hi, I'm Ada — email me at ada@a-e.com"))
+```
+
+`peyeeye.langchain` has no hard dependency on LangChain — if `langchain-core`
+is installed the wrapper is a proper `Runnable` (composable with `|` in LCEL
+pipelines); without it you still get a callable with the same `.invoke` /
+`.ainvoke` / `.batch` surface.
+
+Opt into stateless sealed mode (no server-side mapping) with
+`with_peyeeye(model, client=peyeeye, stateless=True)`.
+
+Accepted prompt shapes: plain strings, chat-message lists (`HumanMessage`,
+`SystemMessage`, …), tuple shorthand (`("human", "Hi Ada")`), dict messages
+(`{"role": "user", "content": "…"}`), and multimodal content lists — image
+parts pass through untouched.
+
+### LiteLLM
+
+Two ways to bolt peyeeye onto a LiteLLM-based app:
+
+```python
+import litellm
+from peyeeye import Peyeeye
+from peyeeye.litellm import with_peyeeye
+
+peyeeye = Peyeeye(api_key=os.environ["PEYEEYE_KEY"])
+completion = with_peyeeye(litellm.completion, client=peyeeye)
+
+resp = completion(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hi, I'm Ada"}],
+)
+print(resp.choices[0].message.content)  # already rehydrated
+```
+
+`with_peyeeye` wraps sync or async completion functions and opens a fresh
+session per call. For LiteLLM's proxy/callback path, register a
+`PeyeeyeHandler` instead:
+
+```python
+import litellm
+from peyeeye.litellm import PeyeeyeHandler
+
+litellm.callbacks = [PeyeeyeHandler(client=peyeeye)]
+```
+
+Multimodal content (text + image parts), async `acompletion`, and stateless
+sealed sessions (`with_peyeeye(..., stateless=True)`) are all supported.
 
 ## Errors
 
