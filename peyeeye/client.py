@@ -44,7 +44,7 @@ from .models import (
 )
 
 DEFAULT_BASE_URL = "https://api.peyeeye.ai"
-USER_AGENT = "peyeeye-python/1.0.1"
+USER_AGENT = "peyeeye-python/1.0.2"
 
 # A token that ends at a chunk boundary looks like ``...[PER`` or ``...[EMAIL_1``.
 # We hold it back until the next chunk closes the bracket, otherwise we'd emit a
