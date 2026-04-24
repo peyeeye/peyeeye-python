@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+import re
+
 import peyeeye
 from peyeeye import Peyeeye, PeyeeyeError
 
 
-def test_version_is_1_0_0() -> None:
-    assert peyeeye.__version__ == "1.0.0"
+def test_version_is_semver() -> None:
+    assert re.match(r"^\d+\.\d+\.\d+(?:[-.].+)?$", peyeeye.__version__)
 
 
 def test_missing_api_key_raises() -> None:

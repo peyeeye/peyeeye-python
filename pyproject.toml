@@ -1,6 +1,6 @@
 [project]
 name = "peyeeye"
-version = "1.0.2"
+version = "1.0.3"
 description = "Official Python client for peyeeye.ai — PII redaction & rehydration for LLM prompts."
 readme = "README.md"
 license = { text = "MIT" }
