@@ -1,0 +1,84 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -q
+
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build toolchain
+        run: python -m pip install --upgrade pip build
+      - name: Read version from pyproject.toml and verify tag
+        id: v
+        shell: bash
+        run: |
+          pkg_version=$(python -c 'import tomllib; print(tomllib.loads(open("pyproject.toml","rb").read().decode())["project"]["version"])')
+          echo "version=$pkg_version" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$pkg_version" ]]; then
+              echo "::error::Release tag ($tag_version) does not match pyproject version ($pkg_version)"
+              exit 1
+            fi
+          fi
+      - name: Build sdist + wheel
+        run: python -m build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI (trusted publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    # The `pypi` environment is where the Trusted Publisher is configured on
+    # pypi.org — requiring `environment` here is what lets PyPI scope OIDC
+    # tokens to just this workflow path.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/peyeeye/${{ needs.build.outputs.version }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish (OIDC, no token required)
+        uses: pypa/gh-action-pypi-publish@release/v1
