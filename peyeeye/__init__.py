@@ -7,6 +7,9 @@
         safe = shield.redact("Hi, I'm Ada, ada@a-e.com")
         reply = call_your_model(safe)
         print(shield.rehydrate(reply))
+
+A single ``Peyeeye`` instance is safe to share across threads and
+asyncio tasks; create one at startup and reuse it.
 """
 
 from .client import Peyeeye, Shield
